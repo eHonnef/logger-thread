@@ -38,6 +38,7 @@ function(target_set_warnings)
     list(FIND this_DISABLE "ALL" disable_all)
     list(FIND this_AS_ERROR "ALL" as_error_all)
     if(NOT ${enable_all} EQUAL -1)
+      # <Change>: Enable selected warnings (manually set)
       if(WMSVC)
         # Not all the warnings, but WAll is unusable when using libraries
         # Unless you'd like to support MSVC in the code with pragmas, this is probably the best option
@@ -57,6 +58,7 @@ function(target_set_warnings)
     endif()
 
     list(FIND this_DISABLE "Annoying" disable_annoying)
+    # <Change>: Disable selected warnings (manually set)
     if(NOT ${disable_annoying} EQUAL -1)
       if(WMSVC)
         # bounds-checked functions require to set __STDC_WANT_LIB_EXT1__ which we usually don't need/want

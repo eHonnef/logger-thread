@@ -13,8 +13,11 @@
 			"**/.DS_Store": true,
 			"**/Thumbs.db": true,
 			"**/build": true,
-			"**/LICENSE": true,
-			"**/Doxyfile.in": true
+			"**/LICENSE": true
+		},
+		"files.associations": {
+			"itens_rp": "plaintext",
+			"ostream": "cpp"
 		}
 	}
 }

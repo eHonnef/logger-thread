@@ -1,61 +1,53 @@
-[![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](http://www.repostatus.org/badges/latest/active.svg)](http://www.repostatus.org/#active)
-[![Build Status](https://travis-ci.org/bsamseth/cpp-project.svg?branch=master)](https://travis-ci.org/bsamseth/cpp-project)
-[![Build status](https://ci.appveyor.com/api/projects/status/g9bh9kjl6ocvsvse/branch/master?svg=true)](https://ci.appveyor.com/project/bsamseth/cpp-project/branch/master)
-[![Coverage Status](https://coveralls.io/repos/github/bsamseth/cpp-project/badge.svg?branch=master)](https://coveralls.io/github/bsamseth/cpp-project?branch=master)
-[![codecov](https://codecov.io/gh/bsamseth/cpp-project/branch/master/graph/badge.svg)](https://codecov.io/gh/bsamseth/cpp-project)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/eb004322b0d146239a57eb242078e179)](https://www.codacy.com/app/bsamseth/cpp-project?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=bsamseth/cpp-project&amp;utm_campaign=Badge_Grade)
-[![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/bsamseth/cpp-project.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/bsamseth/cpp-project/context:cpp)
-[![Total alerts](https://img.shields.io/lgtm/alerts/g/bsamseth/cpp-project.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/bsamseth/cpp-project/alerts/)
-[![license](https://img.shields.io/badge/license-Unlicense-blue.svg)](https://github.com/bsamseth/cpp-project/blob/master/LICENSE)
-[![Lines of Code](https://tokei.rs/b1/github/bsamseth/cpp-project)](https://github.com/Aaronepower/tokei)
-[![Average time to resolve an issue](http://isitmaintained.com/badge/resolution/bsamseth/cpp-project.svg)](http://isitmaintained.com/project/bsamseth/cpp-project "Average time to resolve an issue")
-[![Percentage of issues still open](http://isitmaintained.com/badge/open/bsamseth/cpp-project.svg)](http://isitmaintained.com/project/bsamseth/cpp-project "Percentage of issues still open")
+[![eHonnef - cpp-project](https://img.shields.io/static/v1?label=eHonnef&message=cpp-project&color=blue&logo=github)](https://github.com/eHonnef/cpp-project "Go to GitHub repo")
+[![stars - cpp-project](https://img.shields.io/github/stars/eHonnef/cpp-project?style=social)](https://github.com/eHonnef/cpp-project)
+[![forks - cpp-project](https://img.shields.io/github/forks/eHonnef/cpp-project?style=social)](https://github.com/eHonnef/cpp-project)
+<div align="center">
 
-# (Simplified) Boiler plate for C++ projects
+[![Use this template](https://img.shields.io/badge/Generate-Use_this_template-2ea44f?style=for-the-badge)](https://github.com/eHonnef/cpp-project/generate)
 
-This is a fork of [CPP Project](https://github.com/bsamseth/cpp-project), same ideia, but simply doesn't have the `include` folder, so we only compile and include the `src` folder.
+</div>
 
-This is a boiler plate for C++ projects. What you get:
 
--   Sources, headers and mains separated in distinct folders
--   Use of modern [CMake](https://cmake.org/) for much easier compiling
--   Setup for tests using [doctest](https://github.com/onqtam/doctest)
--   Continuous testing with [Travis-CI](https://travis-ci.org/), [Appveyor](https://www.appveyor.com) and [GitHub Actions](https://github.com/features/actions), with support for C++17.
--   Code coverage reports, including automatic upload to [Coveralls.io](https://coveralls.io/) and/or [Codecov.io](https://codecov.io)
--   Code documentation with [Doxygen](http://www.stack.nl/~dimitri/doxygen/)
+# C++ Project starter
 
-![Demo of usage](https://i.imgur.com/foymVfy.gif)
+This is a modified fork from [Boiler plate for C++ projects](https://github.com/bsamseth/cpp-project), the basic features remains the same:
 
-The difference is that this one is to make single header file, so everything goes inside [src/](src/), checkout [src/example.cc](src/example.cc)
+- Sources, headers and mains separated in distinct folders;
+- Use of modern CMake for much easier compiling;
+- Setup for tests using [doctest](https://github.com/onqtam/doctest);
+- Continuous testing with GitHub Actions, with support for C++17;
+- Code documentation with [Doxygen](http://www.stack.nl/~dimitri/doxygen/);
 
 ## Structure
+
+Change the `PROJECT NAME` folder, or the `sample` folder in this example, and then use as your include folder. This way is better to 3rd party to include your project.
+
 ``` text
 .
 ├── CMakeLists.txt
 ├── app
-│   └── main.cc
+│   └── main.cpp
+├── include
+│   └── <PROJECT NAME>
+│        └── example.h
 ├── src
-│   ├── example.cc
-│   └── exampleConfig.h.in
+│   └── example.cpp
 └── tests
-    ├── dummy.cc
-    └── main.cc
+    ├── dummy.cpp
+    └── main.cpp
 ```
 
-Sources go in [src/](src/), main programs in [app/](app), and
-tests go in [tests/](tests/) (compiled to `unit_tests` by default).
+Sources files go in [src/](src/), headers go in [include/\<PROJECT NAME>](include/sample/), main files go in [app/](app/) and tests go in [tests/](tests/) (compiled to `unit_tests` by default).
 
-If you add a new executable, say `app/hello.cc`, you only need to add the following two lines to [CMakeLists.txt](CMakeLists.txt):
+If you add a new executable, say `app/hello.cpp`, you only need to add the following two lines to [CMakeLists.txt](CMakeLists.txt):
 
-``` cmake
-add_executable(main app/main.cc)   # Name of exec. and location of file.
-target_link_libraries(main PRIVATE ${LIBRARY_NAME})  # Link the executable to lib built from src/*.cc (if it uses it).
+```cmake
+add_executable(hello app/hello.cpp)   # Name of exec. and location of file.
+target_link_libraries(hello PRIVATE ${LIBRARY_NAME} ${lst_external})  # Link the executable to lib built from src/*.cpp (if it uses it).
 ```
 
-You can find the example source code that builds the `main` executable in [app/main.cc](app/main.cc) under the `Build` section in [CMakeLists.txt](CMakeLists.txt).
+You can find the example source code that builds the `main` executable in [app/main.cpp](app/main.cpp) under the `Build` section in [CMakeLists.txt](CMakeLists.txt).
 If the executable you made does not use the library in [src/](src), then only the first line is needed.
-
-
 
 ## Building
 
@@ -73,20 +65,61 @@ Example:
 > make doc       # Generate html documentation.
 ```
 
+Also, you can simply load the [vscode workspace file](.vscode/workspace.code-workspace), then [vscode](https://code.visualstudio.com/) will handle everything (of course, if you have the [C++ environment](https://code.visualstudio.com/docs/cpp/cmake-linux) set in the editor). Just run:
+
+```bash
+code .vscode/workspace.code-workspace
+```
+
 ## .gitignore
 
 The [.gitignore](.gitignore) file is a copy of the [Github C++.gitignore file](https://github.com/github/gitignore/blob/master/C%2B%2B.gitignore),
 with the addition of ignoring the build directory (`build/`).
 
-## Services
-
-If the repository is activated with Travis-CI, then unit tests will be built and executed on each commit.
-The same is true if the repository is activated with Appveyor.
-
-If the repository is activated with Coveralls/Codecov, then deployment to Travis will also calculate code coverage and
-upload this to Coveralls.io and/or Codecov.io
-
 ## Setup
 
+Change the configurations and the names in the [CMakeLists.txt](CMakeLists.txt) file. I commented a `<Change>` flag where you are suppose to or can change.
+
+If you want to generate some badges to put on top of the readme of your project, you can use [MichaelCurrin's badge generator](https://michaelcurrin.github.io/badge-generator/#/).
+
+### For single header libraries
+
+Just set the flag `SINGLE_HEADER` to `ON`, and then you can remove the `src/` folder, you'll only use the `include/` folder.
+
 ### Using the GitHub template
+
 Click the `Use this template` button to make a new repository from this template.
+
+## What changes?
+
+I removed the Travis-CI, Appveyor, Coveralls and Codecov. Personally, I don't use them, but you can include without a problem.
+
+Also, I changed the CMakeFiles in the way that you can include using [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html), using the `MainProject` context. So this way is easier for 3rd parties to include your code... if it is the case.
+
+With this modification there is no longer "insource" unit tests, but you can include without a problem. Keep in mind that it'll broke if your project is included as a subproject (or a dependency). Just include this lines to "enable" the feature:
+
+```cpp
+#ifdef ENABLE_DOCTEST_IN_LIBRARY
+#include "doctest/doctest.h"
+TEST_CASE("we can have tests in headers if we want") {
+  Dummy d;
+  CHECK(d.doSomething() == true);
+}
+#endif
+```
+
+And this in the main files:
+
+```cpp
+// Executables must have the following defined if the library contains
+// doctest definitions. For builds with this disabled, e.g. code shipped to
+// users, this can be left out.
+#ifdef ENABLE_DOCTEST_IN_LIBRARY
+#define DOCTEST_CONFIG_IMPLEMENT
+#include "doctest/doctest.h"
+#endif
+```
+
+## License
+
+Released under [MIT](/LICENSE) by [@ehonnef](https://github.com/ehonnef).
