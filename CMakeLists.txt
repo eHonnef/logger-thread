@@ -6,15 +6,15 @@
 # For many purposes you don't need to change this file.
 # But I marked with <Change> flag where you can tweak the project.
 
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.16)
 
 # <Change>
 # Set project name, version and laguages here.
 # Version numbers are available by including "Config.h" in
 # the source. See Config.h.in for some more details.
 project(
-  boilerplate     # Project name
-  VERSION 1.2.3.4 # Project version
+  LoggerThread    # Project name
+  VERSION 1.0     # Project version
   LANGUAGES CXX   # Project language
 )
 
@@ -29,17 +29,16 @@ endif()
 option(ENABLE_WARNINGS_SETTINGS "Allow target_set_warnings to add flags and defines.
                                  Set this to OFF if you want to provide your own warning parameters." ON)
 option(ENABLE_LTO "Enable link time optimization" ON)
-option(ENABLE_DOCTESTS "Include tests in the library. Setting this to OFF will remove all doctest related code." ON)
-option(ENABLE_THREADS "Enable multithreading" OFF)
+option(ENABLE_DOCTESTS "Include tests in the library. Setting this to OFF will remove all doctest related code." OFF)
+option(ENABLE_THREADS "Enable multithreading" ON)
 
 # <Change> Is this a single header lib?
 # If ON, then you can remove the src/ folder
-set(SINGLE_HEADER OFF)
+set(SINGLE_HEADER ON)
 
-# Not main project, disable doctests
-if (NOT MAIN_PROJECT)
-  set(ENABLE_DOCTESTS OFF)
-endif()
+# Don't want unittesting
+set(ENABLE_DOCTESTS OFF)
+
 
 # Include stuff.
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
@@ -69,32 +68,23 @@ endif()
 # automatically. Keep that in mind when changing files, or explicitly mention them here.
 # file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
-file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h")
+file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/*.cc")
 # --------------------------------------------------------------------------------
 #                            Build!
 # --------------------------------------------------------------------------------
 # Compile all sources into a library.
-if (SINGLE_HEADER)
-  add_library(${PROJECT_NAME} INTERFACE)
-elseif (MAIN_PROJECT)
+if (MAIN_PROJECT)
   add_library(${PROJECT_NAME} OBJECT ${HEADERS} ${SOURCES})
 else()
   add_library(${PROJECT_NAME} ${HEADERS} ${SOURCES})
 endif()
 
-if (SINGLE_HEADER)
-  target_include_directories(
-    ${PROJECT_NAME} INTERFACE
-      $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-      $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}>
-  )
-else()
-  target_include_directories(
-    ${PROJECT_NAME} PUBLIC
-      $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-      $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}>
-  )
-endif()
+
+target_include_directories(
+  ${PROJECT_NAME} PUBLIC
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}>
+)
 
 # --------------------------------------------------------------------------------
 #                            External dependencies
@@ -104,11 +94,7 @@ endif()
 include(FetchExternal)
 
 # Linking external deps
-if (SINGLE_HEADER)
-  target_link_libraries(${PROJECT_NAME} INTERFACE ${lst_external})
-else()
-  target_link_libraries(${PROJECT_NAME} PRIVATE ${lst_external})
-endif()
+target_link_libraries(${PROJECT_NAME} PRIVATE ${lst_external})
 
 # --------------------------------------------------------------------------------
 #                            If this is the main project
@@ -116,12 +102,7 @@ endif()
 if (MAIN_PROJECT)
   # There's also (probably) doctests within the library, so we need to see this as well.
   if(ENABLE_DOCTESTS)
-    if (SINGLE_HEADER)
-      target_link_libraries(${PROJECT_NAME} INTERFACE doctest)
-    else()
-      target_link_libraries(${PROJECT_NAME} PUBLIC doctest)
-    endif()
-
+    target_link_libraries(${PROJECT_NAME} PUBLIC doctest)
     add_subdirectory(tests)
   endif()
 
@@ -130,11 +111,7 @@ if (MAIN_PROJECT)
     set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
     set(THREADS_PREFER_PTHREAD_FLAG TRUE)
     find_package(Threads REQUIRED)
-    if (SINGLE_HEADER)
-      target_link_libraries(${PROJECT_NAME} INTERFACE Threads::Threads)
-    else()
-      target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
-    endif()
+    target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
   endif()
 
   # Set the compile options you want.
@@ -163,7 +140,7 @@ list(APPEND target_files ${PROJECT_NAME})
 set_target_properties(
   ${target_files}
     PROPERTIES
-      CXX_STANDARD 17
+      CXX_STANDARD 20
       CXX_STANDARD_REQUIRED YES
       CXX_EXTENSIONS NO
 )

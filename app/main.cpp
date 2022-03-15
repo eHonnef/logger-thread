@@ -1,21 +1,32 @@
-#include <stdlib.h>
-
-#include <Config.h>
-#include <sample/example.h>
-
-#include <fmt/core.h>
+#include <LoggerThread/LoggerDaemon.cc>
+#include <algorithm>
+#include <iostream>
 
 /*
- * Simple main program that demontrates how access
- * CMake definitions (here the version number) from source code.
+ * Main program
  */
 int main() {
-  fmt::print("C++ Boiler plate v{}.{}.{}.{}\n", PROJECT_VERSION_MAJOR, PROJECT_VERSION_MINOR,
-             PROJECT_VERSION_PATCH, PROJECT_VERSION_TWEAK);
-  std::system("cat ../LICENSE");
+  CLogger Logger;
+  Logger.AddLogFile("teste1");
 
-  // Bring in the dummy class from the example source,
-  // just to show that it is accessible from main.cpp.
-  Dummy d = Dummy();
-  return d.doSomething() ? 0 : -1;
+  Logger.Start();
+  Logger.Detach();
+
+  while (true) {
+    std::string msg;
+    fmt::print("Write something: ");
+    std::cin >> msg;
+    if (msg == "exit")
+      break;
+    Logger.WriteInfo(msg);
+    fmt::print("Enqueued: {}\n", msg);
+  }
+
+  try {
+    Logger.Join();
+  } catch (const std::exception &e) {
+    fmt::print("{}\n", e.what());
+  }
+
+  return 0;
 }
