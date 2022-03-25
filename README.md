@@ -22,6 +22,26 @@ Important:
 
 Checkout [main](app/main.cpp) for an usage example.
 
+We format the logs like `Date Time.Ms [Level] :: Message\n`. Below is how the log looks like with all [log levels](include/LoggerThread/LoggerDaemon.cc#L107) shown:
+
+```log
+2022-03-24 23:35:01.0090 [DEBUG]     :: A debug message
+2022-03-24 23:35:01.0090 [INFO]      :: An Info message, this is the common (or base level)
+2022-03-24 23:35:01.0090 [IMPORTANT] :: An important info, to highlight a "common" info
+2022-03-24 23:35:01.0090 [WARNING]   :: A warning message, something to be aware that can lead to a problem
+2022-03-24 23:35:01.0090 [ERROR]     :: An error message, something went wrong that shouldn't, for example, an access violation
+2022-03-24 23:35:01.0090 [CRITICAL]  :: A critial error message, should we do a rollback or call the fire department?
+```
+
+To write a message to a log, just call one of the `Write...` functions:
+
+- [WriteDebug](include/LoggerThread/LoggerDaemon.cc#L288)
+- [WriteInfo](include/LoggerThread/LoggerDaemon.cc#L254)
+- [WriteImportant](include/LoggerThread/LoggerDaemon.cc#L310)
+- [WriteWarning](include/LoggerThread/LoggerDaemon.cc#L276)
+- [WriteError](include/LoggerThread/LoggerDaemon.cc#L265)
+- [WriteCritical](include/LoggerThread/LoggerDaemon.cc#L299)
+
 ## Include in my project
 
 Using CMake's `FetchContent`:
