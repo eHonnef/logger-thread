@@ -10,11 +10,15 @@ Very simple, just import it and be happy :)
 
 You can tweak some stuff in the [LoggerDaemon file](include/LoggerThread/LoggerDaemon.cc):
 
-- [c_nBufferSize](include/LoggerThread/LoggerDaemon.cc#L28): Set the buffer size, the [common agreement seems like to be 4096 bytes](https://stackoverflow.com/questions/1862982/c-sharp-filestream-optimal-buffer-size-for-writing-large-files);
-- [c_nMaxIterations](include/LoggerThread/LoggerDaemon.cc#L186): Set the max iterations without writting to file before writting to file, in other words, if there is 50 iterations without writting to file, then it'll force write the buffer;
-- [c_nThreadRateMs](include/LoggerThread/LoggerDaemon.cc#L187): Set the thread processing rate;
+- [c_nBufferSize](include/LoggerThread/LoggerDaemon.cc#L29): Set the buffer size, [it seems like common agreement is 4096 bytes](https://stackoverflow.com/questions/1862982/c-sharp-filestream-optimal-buffer-size-for-writing-large-files);
+- [c_nMaxIterations](include/LoggerThread/LoggerDaemon.cc#L102): Set the max iterations without writting to file before writting to file, default is 50, so, if there is 50 iterations without writting to file, then it'll force write the buffer to file;
 
-Then you can add a log file using the [AddLogFile](include/LoggerThread/LoggerDaemon.cc#L228) function, it'll register the file and return the file index inside the thread. So, when you are writting a log you call the `Write` functions with this index to indicate the file to be written.
+Then you can add a log file using the [AddLogFile](include/LoggerThread/LoggerDaemon.cc#L240) function, it'll register the file and return the file index inside the thread. So, when you are writting a log you call the `Write` functions with this index to indicate the file to be written.
+
+Important:
+
+- To avoid errors, add the files with [AddLogFile](include/LoggerThread/LoggerDaemon.cc#L240) and then call `Start`.
+- The `Stop` function will wait for the thread to write the remaining queue into file, also the buffer.
 
 Checkout [main](app/main.cpp) for an usage example.
 

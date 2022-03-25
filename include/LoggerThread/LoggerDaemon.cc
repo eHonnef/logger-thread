@@ -26,9 +26,9 @@ private:
   class CLogFile {
   private:
     // Buffer size in bytes, we subtract 1 because strings need to be null terminated
-    static const size_t c_nBufferSize = -1 + (4096);
+    static const size_t c_nBufferSize = 4096;
     int m_nWOWrite = 0;               // Number of iterations without writting the buffer into file.
-    char m_Buffer[c_nBufferSize + 1]; // This file buffer
+    char m_Buffer[c_nBufferSize];     // This file buffer
     size_t m_nBufferUsage;            // Buffer usage
     std::filesystem::path m_PathFile; // This file path
 
@@ -36,7 +36,7 @@ private:
      * Clears the buffer, writting null character
      */
     void ClearBuffer() {
-      std::fill_n(m_Buffer, c_nBufferSize + 1, '\0');
+      std::fill_n(m_Buffer, c_nBufferSize, '\0');
       m_nBufferUsage = 0;
       m_nWOWrite = 0;
     }
@@ -45,7 +45,7 @@ private:
     /*
      * Constructor
      */
-    CLogFile(const std::string &strFilePath) {
+    CLogFile(const std::string_view &strFilePath) {
       m_PathFile = std::filesystem::path(strFilePath);
       ClearBuffer();
       // Creating file
@@ -53,14 +53,15 @@ private:
     }
 
     /*
-     * Write to file or bufferize.
+     * Write to file or bufferize strMessage.
      */
     void WriteOrBufferize(const std::string_view &strMessage) {
       size_t nNewBufferSize = m_nBufferUsage + strMessage.size();
 
-      if (nNewBufferSize < c_nBufferSize) {
+      // Strings should be null terminated (\0), so we reserve the last char
+      if (nNewBufferSize < (c_nBufferSize - 1)) {
         // Bufferize
-        std::memcpy(&m_Buffer[m_nBufferUsage == 0 ? 0 : m_nBufferUsage - 1], strMessage.data(),
+        std::memcpy(&m_Buffer[m_nBufferUsage == 0 ? 0 : m_nBufferUsage], strMessage.data(),
                     strMessage.size());
         m_nBufferUsage += strMessage.size();
       } else
@@ -70,33 +71,37 @@ private:
 
     /*
      * Unconditionally write to file.
+     * @param strMessage Message to be written.
      */
     void WriteToFile(const std::string_view &strMessage) {
       // Write
       std::ofstream File;
       File.open(m_PathFile, std::ios_base::app); // Append
-      File << m_Buffer << strMessage.data();
+
+      File << m_Buffer;
+      File << strMessage.data();
 
       // Clear
       ClearBuffer();
     }
 
     /*
-     * Get m_nWOWrite;
+     * Set m_nWOWrite;
      * @return The number of iterations without writting to file.
      */
     int &IterationsWOWrite() { return m_nWOWrite; }
 
     /*
-     * Set m_nWOWrite;
+     * Get m_nWOWrite;
      * @param nNumber The number of iterations without writting to file.
      */
     const int &IterationsWOWrite() const { return m_nWOWrite; }
   };
 
 private:
-  std::vector<CLogFile> m_lstFiles;   // Files managed by this thread
-  std::filesystem::path m_PathLogDir; // Today's log directory
+  static const int c_nMaxIterations = 50; // Max iterations before we write the buffer to file
+  std::vector<CLogFile> m_lstFiles;       // Files managed by this thread
+  std::filesystem::path m_PathLogDir;     // Formatted log directory path @see CreateLogDir
 
   // Enumerator to list the log levels.
   enum ELogLevel { llDebug, llNormal, llImportant, llWarning, llError, llCritical };
@@ -106,10 +111,7 @@ private:
    */
   void CreateLogDir(const std::string_view &strLogDir) {
     // No param for the base log directory, we assume the local log dir
-    if (strLogDir.empty())
-      m_PathLogDir.assign("./Logs/");
-    else
-      m_PathLogDir.assign(strLogDir);
+    m_PathLogDir.assign(strLogDir);
 
     // Get the current date and time
     std::string strTodayDirName =
@@ -134,7 +136,7 @@ private:
   /*
    * It just post the log message in the thread.
    */
-  void PostMessage(ELogLevel LogLevel, int nLogIndex, const std::string &strMessage) {
+  void PostMessage(ELogLevel LogLevel, int nLogIndex, const std::string_view &strMessage) {
     SData Data(0, nLogIndex, FormatMessage(LogLevel, strMessage));
     SafeAddMessage(Data);
   }
@@ -156,8 +158,8 @@ private:
    * Add a timestamp and format the message accordingly.
    * @return Returns the formatted message with a timestamp and the log level.
    */
-  std::string FormatMessage(ELogLevel LogLevel, const std::string &strMessage) {
-    std::string strLogLevel = "";
+  std::string FormatMessage(ELogLevel LogLevel, const std::string_view &strMessage) {
+    std::string strLogLevel;
     switch (LogLevel) {
     case llDebug:
       strLogLevel = "[DEBUG]";
@@ -179,17 +181,17 @@ private:
       break;
     }
 
+    // Formatting each message as below:
+    // Date Time.Ms [Level] :: Message\n
     return fmt::format("{} {:<11} :: {}\n", GetTimeNow(), strLogLevel, strMessage);
   }
 
 protected:
-  static const int c_nMaxIterations = 50; // Max iterations before we write the buffer to file
-  static const int c_nThreadRateMs = 20;  // Thread processing rate in ms
-
   /*
    * Process before the queue.
+   * We increase the iterations without writing to file.
    */
-  void ProcessPreamble() override {
+  void ProcessPreQueue() override {
     for (auto &elem : m_lstFiles) {
       elem.IterationsWOWrite() += 1;
       if (elem.IterationsWOWrite() >= c_nMaxIterations)
@@ -198,7 +200,19 @@ protected:
   }
 
   /*
-   * Process the queue
+   * Dequeue the remaining messages and Unconditionally write to file.
+   */
+  void ProcessThreadEpilogue() override {
+    SData Data;
+    while (TryDequeue(Data))
+      m_lstFiles.at(Data.nMessageID).WriteOrBufferize(Data.Data);
+
+    for (auto &elem : m_lstFiles)
+      elem.WriteToFile("");
+  }
+
+  /*
+   * Process the queue.
    */
   void Process(int nMessageID, const SData &Data) override {
     m_lstFiles.at(nMessageID).WriteOrBufferize(Data.Data);
@@ -209,15 +223,13 @@ public:
    * Constructor.
    * @param strLogDir The root directory where the logs will be created.
    */
-  CLogger(const std::string_view &strLogDir) : CDaemon(c_nThreadRateMs, true) {
-    CreateLogDir(strLogDir);
-  }
+  CLogger(const std::string_view &strLogDir) : CDaemon() { CreateLogDir(strLogDir); }
 
   /*
    * Constructor.
    * It'll assume the default directory.
    */
-  CLogger() : CDaemon(c_nThreadRateMs, true) { CreateLogDir("./Logs/"); }
+  CLogger() : CDaemon() { CreateLogDir("./Logs/"); }
 
   /*
    * Add a log file to write.
@@ -225,38 +237,44 @@ public:
    * becoming "ProgramRun_2022-03-14".
    * @return The log file index, save it to ask when writting the message using the Write functions.
    */
-  int AddLogFile(const std::string &strLogName) {
+  int AddLogFile(const std::string_view &strLogName) {
     auto strFile = fmt::format("{}/{}_{:%Y-%m-%d}.log", m_PathLogDir.c_str(), strLogName,
                                fmt::localtime(std::time(nullptr)));
 
-    m_lstFiles.push_back(std::move(CLogFile(strFile)));
+    m_lstFiles.emplace_back(strFile);
     return m_lstFiles.size() - 1;
   }
 
   /*
    * Write a simple info to file.
    * @param nLogIndex If no param is provided, we assume 0.
+   * @param strMessage The message that will be written to file. No need to format, we will handle
+   * it :)
    */
-  void WriteInfo(const std::string &strMessage) { WriteInfo(0, strMessage); }
-  void WriteInfo(int nLogIndex, const std::string &strMessage) {
+  void WriteInfo(const std::string_view &strMessage) { WriteInfo(0, strMessage); }
+  void WriteInfo(int nLogIndex, const std::string_view &strMessage) {
     PostMessage(llNormal, nLogIndex, strMessage);
   }
 
   /*
    * Write an error info to file.
    * @param nLogIndex If no param is provided, we assume 0.
+   * @param strMessage The message that will be written to file. No need to format, we will handle
+   * it :)
    */
-  void WriteError(const std::string &strMessage) { WriteError(0, strMessage); }
-  void WriteError(int nLogIndex, const std::string &strMessage) {
+  void WriteError(const std::string_view &strMessage) { WriteError(0, strMessage); }
+  void WriteError(int nLogIndex, const std::string_view &strMessage) {
     PostMessage(llError, nLogIndex, strMessage);
   }
 
   /*
    * Write an warning info to file.
    * @param nLogIndex If no param is provided, we assume 0.
+   * @param strMessage The message that will be written to file. No need to format, we will handle
+   * it :)
    */
-  void WriteWarning(const std::string &strMessage) { WriteWarning(0, strMessage); }
-  void WriteWarning(int nLogIndex, const std::string &strMessage) {
+  void WriteWarning(const std::string_view &strMessage) { WriteWarning(0, strMessage); }
+  void WriteWarning(int nLogIndex, const std::string_view &strMessage) {
     PostMessage(llWarning, nLogIndex, strMessage);
   }
 
@@ -264,27 +282,33 @@ public:
    * Write a debug info to file.
    * It'll only write if the program is built as debug.
    * @param nLogIndex If no param is provided, we assume 0.
+   * @param strMessage The message that will be written to file. No need to format, we will handle
+   * it :)
    */
-  void WriteDebug(const std::string &strMessage) { WriteDebug(0, strMessage); }
-  void WriteDebug(int nLogIndex, const std::string &strMessage) {
+  void WriteDebug(const std::string_view &strMessage) { WriteDebug(0, strMessage); }
+  void WriteDebug(int nLogIndex, const std::string_view &strMessage) {
     PostMessage(llDebug, nLogIndex, strMessage);
   }
 
   /*
    * Write a critial info to file.
    * @param nLogIndex If no param is provided, we assume 0.
+   * @param strMessage The message that will be written to file. No need to format, we will handle
+   * it :)
    */
-  void WriteCritical(const std::string &strMessage) { WriteCritical(0, strMessage); }
-  void WriteCritical(int nLogIndex, const std::string &strMessage) {
+  void WriteCritical(const std::string_view &strMessage) { WriteCritical(0, strMessage); }
+  void WriteCritical(int nLogIndex, const std::string_view &strMessage) {
     PostMessage(llCritical, nLogIndex, strMessage);
   }
 
   /*
    * Write an important info to file.
    * @param nLogIndex If no param is provided, we assume 0.
+   * @param strMessage The message that will be written to file. No need to format, we will handle
+   * it :)
    */
-  void WriteImportant(const std::string &strMessage) { WriteCritical(0, strMessage); }
-  void WriteImportant(int nLogIndex, const std::string &strMessage) {
+  void WriteImportant(const std::string_view &strMessage) { WriteCritical(0, strMessage); }
+  void WriteImportant(int nLogIndex, const std::string_view &strMessage) {
     PostMessage(llImportant, nLogIndex, strMessage);
   }
 };
