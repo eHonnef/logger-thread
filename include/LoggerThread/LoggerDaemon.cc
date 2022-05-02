@@ -5,10 +5,58 @@
 #include <cstring>
 #include <filesystem>
 #include <fmt/chrono.h>
+#include <fmt/color.h>
 #include <fstream>
 #include <regex>
 #include <string_view>
 #endif
+
+namespace NLogger {
+
+// Enumerator to list the log levels.
+enum ELogLevel {
+  llTrace,
+  llDebug,
+  llInfo,
+  llImportant,
+  llWarning,
+  llError,
+  llCritical,
+  llFatal,
+  llNone
+};
+
+static std::string LogLevelToString(ELogLevel LogLevel) {
+  switch (LogLevel) {
+  case llTrace:
+    return "TRACE";
+  case llDebug:
+    return "DEBUG";
+  case llInfo:
+    return "INFO";
+  case llImportant:
+    return "IMPORTANT";
+  case llWarning:
+    return "WARNING";
+  case llError:
+    return "ERROR";
+  case llCritical:
+    return "CRITICAL";
+  case llFatal:
+    return "FATAL";
+  case llNone:
+    return "NONE";
+  }
+  return "";
+}
+
+struct SLogData {
+  std::string strMessage = "";
+  ELogLevel LogLevel = llNone;
+
+  SLogData(const std::string_view &message, ELogLevel LL) : strMessage(message), LogLevel(LL) {}
+  SLogData() = default;
+};
 
 /*
  * Logger thread class.
@@ -18,8 +66,45 @@
  * Set the iterations to write to file in c_nMaxIterations;
  * Set the thread rate in c_nThreadRateMs;
  */
-class CLogger : public CDaemon<std::string> {
+class CLogger : public CDaemon<SLogData> {
 private:
+  /*
+   * Private struct for settings.
+   */
+  struct SLogSettings {
+    // Log detail level, only log the logs that is bigger or equal than the set one.
+    ELogLevel LogLevel = llDebug;
+    std::string LogFolder = "./Logs/";  // The log folder location
+    bool SelfLog = false;               // Log this library info? (obs.: Only in console).
+    bool LogInFile = true;              // Log in the file?
+    bool ConsoleLog = false;            // Log in the console?
+    bool RemoveLogFolderOnInit = false; // Remove the log folder on init?
+
+    fmt::text_style Color(ELogLevel LL) {
+      switch (LL) {
+      case llTrace:
+        return fmt::fg(fmt::color::light_gray);
+      case llDebug:
+        return fmt::emphasis::bold | fmt::fg(fmt::color::dark_cyan);
+      case llInfo:
+        return fmt::fg(fmt::color::white);
+      case llImportant:
+        return fmt::fg(fmt::color::orange);
+      case llWarning:
+        return fmt::emphasis::bold | fmt::fg(fmt::color::yellow);
+      case llError:
+        return fmt::fg(fmt::color::red);
+      case llCritical:
+        return fmt::emphasis::bold | fmt::bg(fmt::color::dark_red) | fmt::fg(fmt::color::white);
+      case llFatal:
+        return fmt::emphasis::bold | fmt::bg(fmt::color::red) | fmt::fg(fmt::color::white);
+      case llNone:
+        return fmt::text_style();
+      }
+      return fmt::text_style();
+    }
+  }; // end struct
+
   /*
    * Private class that represents a log file with its own buffer.
    */
@@ -96,15 +181,19 @@ private:
      * @param nNumber The number of iterations without writting to file.
      */
     const int &IterationsWOWrite() const { return m_nWOWrite; }
-  };
+  }; // end class
 
 private:
   static const int c_nMaxIterations = 50; // Max iterations before we write the buffer to file
   std::vector<CLogFile> m_lstFiles;       // Files managed by this thread
   std::filesystem::path m_PathLogDir;     // Formatted log directory path @see CreateLogDir
+  SLogSettings m_LogSettings;             // Log settings
 
-  // Enumerator to list the log levels.
-  enum ELogLevel { llDebug, llNormal, llImportant, llWarning, llError, llCritical };
+  template <typename... Args> void SelfLog(fmt::string_view strFormat, const Args &...args) {
+    if (m_LogSettings.SelfLog)
+      fmt::print("[Logger] {}\n",
+                 fmt::vformat(strFormat, fmt::format_args(fmt::make_format_args(args...))));
+  }
 
   /*
    * I assume there will be a base log dir like: /project/Logs.
@@ -128,6 +217,8 @@ private:
     if (nCount > 0)
       strTodayDirName += "_" + std::to_string(nCount);
 
+    SelfLog("Created folder: {}", strTodayDirName);
+
     // We create the folder
     m_PathLogDir.append(strTodayDirName);
     std::filesystem::create_directories(m_PathLogDir);
@@ -136,8 +227,17 @@ private:
   /*
    * It just post the log message in the thread.
    */
-  void PostMessage(ELogLevel LogLevel, int nLogIndex, const std::string_view &strMessage) {
-    SData Data(0, nLogIndex, FormatMessage(LogLevel, strMessage));
+  template <typename... Args>
+  void PostMessage(int nLogIndex, ELogLevel LogLevel, fmt::string_view strFormat,
+                   const Args &...args) {
+    if (LogLevel < m_LogSettings.LogLevel)
+      return; // We don't post the message.
+
+    SData Data(0, nLogIndex,
+               SLogData(FormatMessage(LogLevel,
+                                      fmt::vformat(strFormat, fmt::format_args(
+                                                                  fmt::make_format_args(args...)))),
+                        LogLevel));
     SafeAddMessage(Data);
   }
 
@@ -159,31 +259,10 @@ private:
    * @return Returns the formatted message with a timestamp and the log level.
    */
   std::string FormatMessage(ELogLevel LogLevel, const std::string_view &strMessage) {
-    std::string strLogLevel;
-    switch (LogLevel) {
-    case llDebug:
-      strLogLevel = "[DEBUG]";
-      break;
-    case llImportant:
-      strLogLevel = "[IMPORTANT]";
-      break;
-    case llWarning:
-      strLogLevel = "[WARNING]";
-      break;
-    case llError:
-      strLogLevel = "[ERROR]";
-      break;
-    case llCritical:
-      strLogLevel = "[CRITICAL]";
-      break;
-    case llNormal:
-      strLogLevel = "[INFO]";
-      break;
-    }
-
     // Formatting each message as below:
     // Date Time.Ms [Level] :: Message\n
-    return fmt::format("{} {:<11} :: {}\n", GetTimeNow(), strLogLevel, strMessage);
+    return fmt::format("{} {:<11} :: {}\n", GetTimeNow(),
+                       fmt::format("[{}]", LogLevelToString(LogLevel)), strMessage);
   }
 
 protected:
@@ -192,6 +271,9 @@ protected:
    * We increase the iterations without writing to file.
    */
   void ProcessPreQueue() override {
+    if (!m_LogSettings.LogInFile)
+      return;
+
     for (auto &elem : m_lstFiles) {
       elem.IterationsWOWrite() += 1;
       if (elem.IterationsWOWrite() >= c_nMaxIterations)
@@ -205,31 +287,55 @@ protected:
   void ProcessThreadEpilogue() override {
     SData Data;
     while (TryDequeue(Data))
-      m_lstFiles.at(Data.nMessageID).WriteOrBufferize(Data.Data);
+      Process(Data.nMessageID, Data);
 
-    for (auto &elem : m_lstFiles)
-      elem.WriteToFile("");
+    if (m_LogSettings.LogInFile)
+      for (auto &elem : m_lstFiles)
+        elem.WriteToFile("");
   }
 
   /*
    * Process the queue.
    */
   void Process(int nMessageID, const SData &Data) override {
-    m_lstFiles.at(nMessageID).WriteOrBufferize(Data.Data);
+    if (m_LogSettings.LogInFile)
+      m_lstFiles.at(nMessageID).WriteOrBufferize(Data.Data.strMessage);
+
+    if (m_LogSettings.ConsoleLog)
+      fmt::print(m_LogSettings.Color(Data.Data.LogLevel), "[File: {}]{}", nMessageID,
+                 Data.Data.strMessage);
   }
 
 public:
   /*
    * Constructor.
-   * @param strLogDir The root directory where the logs will be created.
    */
-  CLogger(const std::string_view &strLogDir) : CDaemon() { CreateLogDir(strLogDir); }
+  CLogger() = default;
 
   /*
-   * Constructor.
-   * It'll assume the default directory.
+   * Return the settings object.
+   * I'll recommend to change the settings before calling Start.
    */
-  CLogger() : CDaemon() { CreateLogDir("./Logs/"); }
+  SLogSettings &Settings() { return m_LogSettings; }
+
+  /*
+   * Call this before start and before AddLogFile.
+   */
+  void Init() {
+    SelfLog("Settings: LogFolder={}; LogLevel={}; SelfLog={}; LogInFile={}; ConsoleLog={}; "
+            "RemoveLogFolderOnInit={}",
+            m_LogSettings.LogFolder, LogLevelToString(m_LogSettings.LogLevel),
+            m_LogSettings.SelfLog, m_LogSettings.LogInFile, m_LogSettings.ConsoleLog,
+            m_LogSettings.RemoveLogFolderOnInit);
+
+    if (m_LogSettings.RemoveLogFolderOnInit) {
+      SelfLog("Removing folder: {}", m_LogSettings.LogFolder);
+      std::filesystem::remove_all(m_LogSettings.LogFolder);
+    }
+
+    if (m_LogSettings.LogInFile)
+      CreateLogDir(m_LogSettings.LogFolder);
+  }
 
   /*
    * Add a log file to write.
@@ -241,76 +347,100 @@ public:
     auto strFile = fmt::format("{}/{}_{:%Y-%m-%d}.log", m_PathLogDir.c_str(), strLogName,
                                fmt::localtime(std::time(nullptr)));
 
+    SelfLog("File added: {}", strFile);
     m_lstFiles.emplace_back(strFile);
     return m_lstFiles.size() - 1;
   }
 
   /*
-   * Write a simple info to file.
-   * @param nLogIndex If no param is provided, we assume 0.
-   * @param strMessage The message that will be written to file. No need to format, we will handle
-   * it :)
+   * Write trace info to file.
    */
-  void WriteInfo(const std::string_view &strMessage) { WriteInfo(0, strMessage); }
-  void WriteInfo(int nLogIndex, const std::string_view &strMessage) {
-    PostMessage(llNormal, nLogIndex, strMessage);
+  template <typename... Args> void WriteTrace(fmt::string_view strFormat, const Args &...args) {
+    PostMessage(0, llTrace, strFormat, args...);
   }
-
-  /*
-   * Write an error info to file.
-   * @param nLogIndex If no param is provided, we assume 0.
-   * @param strMessage The message that will be written to file. No need to format, we will handle
-   * it :)
-   */
-  void WriteError(const std::string_view &strMessage) { WriteError(0, strMessage); }
-  void WriteError(int nLogIndex, const std::string_view &strMessage) {
-    PostMessage(llError, nLogIndex, strMessage);
-  }
-
-  /*
-   * Write an warning info to file.
-   * @param nLogIndex If no param is provided, we assume 0.
-   * @param strMessage The message that will be written to file. No need to format, we will handle
-   * it :)
-   */
-  void WriteWarning(const std::string_view &strMessage) { WriteWarning(0, strMessage); }
-  void WriteWarning(int nLogIndex, const std::string_view &strMessage) {
-    PostMessage(llWarning, nLogIndex, strMessage);
+  template <typename... Args>
+  void WriteTrace(int nLogIndex, fmt::string_view strFormat, const Args &...args) {
+    PostMessage(nLogIndex, llTrace, strFormat, args...);
   }
 
   /*
    * Write a debug info to file.
-   * It'll only write if the program is built as debug.
-   * @param nLogIndex If no param is provided, we assume 0.
-   * @param strMessage The message that will be written to file. No need to format, we will handle
-   * it :)
    */
-  void WriteDebug(const std::string_view &strMessage) { WriteDebug(0, strMessage); }
-  void WriteDebug(int nLogIndex, const std::string_view &strMessage) {
-    PostMessage(llDebug, nLogIndex, strMessage);
+  template <typename... Args> void WriteDebug(fmt::string_view strFormat, const Args &...args) {
+    PostMessage(0, llDebug, strFormat, args...);
+  }
+  template <typename... Args>
+  void WriteDebug(int nLogIndex, fmt::string_view strFormat, const Args &...args) {
+    PostMessage(nLogIndex, llDebug, strFormat, args...);
   }
 
   /*
-   * Write a critial info to file.
-   * @param nLogIndex If no param is provided, we assume 0.
-   * @param strMessage The message that will be written to file. No need to format, we will handle
-   * it :)
+   * Write a simple info to file.
    */
-  void WriteCritical(const std::string_view &strMessage) { WriteCritical(0, strMessage); }
-  void WriteCritical(int nLogIndex, const std::string_view &strMessage) {
-    PostMessage(llCritical, nLogIndex, strMessage);
+  template <typename... Args> void WriteInfo(fmt::string_view strFormat, const Args &...args) {
+    PostMessage(0, llInfo, strFormat, args...);
+  }
+  template <typename... Args>
+  void WriteInfo(int nLogIndex, fmt::string_view strFormat, const Args &...args) {
+    PostMessage(nLogIndex, llInfo, strFormat, args...);
   }
 
   /*
    * Write an important info to file.
-   * @param nLogIndex If no param is provided, we assume 0.
-   * @param strMessage The message that will be written to file. No need to format, we will handle
-   * it :)
    */
-  void WriteImportant(const std::string_view &strMessage) { WriteCritical(0, strMessage); }
-  void WriteImportant(int nLogIndex, const std::string_view &strMessage) {
-    PostMessage(llImportant, nLogIndex, strMessage);
+  template <typename... Args> void WriteImportant(fmt::string_view strFormat, const Args &...args) {
+    PostMessage(0, llImportant, strFormat, args...);
+  }
+  template <typename... Args>
+  void WriteImportant(int nLogIndex, fmt::string_view strFormat, const Args &...args) {
+    PostMessage(nLogIndex, llImportant, strFormat, args...);
+  }
+
+  /*
+   * Write an warning info to file.
+   */
+  template <typename... Args> void WriteWarning(fmt::string_view strFormat, const Args &...args) {
+    PostMessage(0, llWarning, strFormat, args...);
+  }
+  template <typename... Args>
+  void WriteWarning(int nLogIndex, fmt::string_view strFormat, const Args &...args) {
+    PostMessage(nLogIndex, llWarning, strFormat, args...);
+  }
+
+  /*
+   * Write an error info to file.
+   */
+  template <typename... Args> void WriteError(fmt::string_view strFormat, const Args &...args) {
+    PostMessage(0, llError, strFormat, args...);
+  }
+  template <typename... Args>
+  void WriteError(int nLogIndex, fmt::string_view strFormat, const Args &...args) {
+    PostMessage(nLogIndex, llError, strFormat, args...);
+  }
+
+  /*
+   * Write a critial info to file.
+   */
+  template <typename... Args> void WriteCritical(fmt::string_view strFormat, const Args &...args) {
+    PostMessage(0, llCritical, strFormat, args...);
+  }
+  template <typename... Args>
+  void WriteCritical(int nLogIndex, fmt::string_view strFormat, const Args &...args) {
+    PostMessage(nLogIndex, llCritical, strFormat, args...);
+  }
+
+  /*
+   * Write a fatal info to file.
+   */
+  template <typename... Args> void WriteFatal(fmt::string_view strFormat, const Args &...args) {
+    PostMessage(0, llFatal, strFormat, args...);
+  }
+  template <typename... Args>
+  void WriteFatal(int nLogIndex, fmt::string_view strFormat, const Args &...args) {
+    PostMessage(nLogIndex, llFatal, strFormat, args...);
   }
 };
+
+} // end namespace NLogger
 
 #endif // LOGGER_DAEMON_H
